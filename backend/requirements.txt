@@ -1,0 +1,5 @@
+Flask>=2.0
+Werkzeug>=2.0
+Pillow>=9.0
+# ffmpeg is required for audio/video conversion but must be installed on the system and available on PATH
+# On Windows, download from https://ffmpeg.org and add the bin folder to PATH
