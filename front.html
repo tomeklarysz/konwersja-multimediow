@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Konwerter Multimedialny MediaFlex</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Prosty styl dla estetyki Material Design */
+        body {
+            background-color: #f0f2f5; /* Tło zbliżone do szarego/błękitnego MUI */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .app-card {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); /* Cień jak w Material UI */
+            border-radius: 12px;
+        }
+        .upload-area {
+            border: 2px dashed #93c5fd; /* Delikatna niebieska ramka */
+            background-color: #eff6ff; /* Bardzo jasny niebieski dla kontrastu */
+        }
+    </style>
+</head>
+<body>
+
+    <div class="app-card w-full max-w-4xl bg-white p-8">
+        
+        <header class="flex justify-between items-start mb-6">
+            <div class="text-3xl font-bold text-gray-700">
+                <span class="text-blue-600">MF</span>
+            </div>
+
+            <div class="w-32 h-20">
+                <img src="https://i.imgur.com/KqS1T6Z.png" alt="Animacja człowieka z psem" class="w-full h-full object-contain">
+            </div>
+        </header>
+
+        <hr class="mb-6 border-gray-200">
+
+        <main class="flex">
+            
+            <div class="flex-1 pr-8">
+                
+                <div id="upload-area" class="upload-area p-8 text-center cursor-pointer rounded-lg mb-4 hover:bg-blue-100 transition duration-300">
+                    <input type="file" id="fileInput" multiple hidden onchange="handleFiles(this.files)">
+                    <p class="text-blue-600 font-semibold text-lg">Przeciągnij i upuść pliki tutaj lub <span class="underline">kliknij, aby wgrać</span></p>
+                    <p class="text-sm text-gray-500 mt-1">Maks. 10MB na plik. Obsługiwane: MP4, PNG, MP3...</p>
+                </div>
+                
+                <div id="file-list" class="space-y-2 text-gray-700">
+                    <div class="flex justify-between items-center text-sm">
+                        <span>📄 video1.mp4 <span class="text-gray-500">(8.2MB)</span></span>
+                        <span class="text-xs text-gray-400">Wgrano</span>
+                    </div>
+                    <div class="flex justify-between items-center text-sm">
+                        <span>📄 image2.png <span class="text-gray-500">(1.5MB)</span></span>
+                        <span class="text-xs text-gray-400">Wgrano</span>
+                    </div>
+                    <div class="flex justify-between items-center text-sm">
+                        <span>📄 audio3.mp3 <span class="text-gray-500">(3.1MB)</span></span>
+                        <span class="text-xs text-gray-400">Wgrano</span>
+                    </div>
+                </div>
+
+                <div class="mt-8">
+                    <div class="w-full bg-gray-200 rounded-full h-2.5">
+                        <div id="progressBar" class="bg-blue-600 h-2.5 rounded-full" style="width: 40%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="w-64 pl-8 border-l border-gray-200 flex flex-col justify-between">
+                <div>
+                    <label for="convert-select" class="block text-gray-700 font-semibold mb-2">Convert to:</label>
+                    <div class="flex gap-2">
+                        <select id="convert-select" class="flex-1 border border-gray-300 p-2 rounded-lg focus:outline-none focus:border-blue-500">
+                            <option value="mp4">MP4</option>
+                            <option value="avi">AVI</option>
+                            <option value="jpeg">JPEG</option>
+                            <option value="mp3">MP3</option>
+                        </select>
+                        
+                        <button id="okButton" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700 transition duration-300 shadow-md">OK</button>
+                    </div>
+                </div>
+                
+                <div class="mt-8">
+                    <p class="text-sm text-gray-600 mb-2" id="progressText">40% przetworzono</p>
+                    <button id="downloadButton" disabled class="w-full bg-gray-300 text-gray-700 px-4 py-2 rounded-lg font-semibold cursor-not-allowed">DOWNLOAD</button>
+                </div>
+            </div>
+        </main>
+        
+        <footer class="mt-8 pt-4 border-t border-gray-200">
+            <div class="h-12 bg-gray-700 text-white flex items-center justify-center rounded-md text-sm">
+                AD BANNER (Opcjonalny baner reklamowy)
+            </div>
+        </footer>
+
+    </div>
+
+    <script>
+        document.getElementById('upload-area').addEventListener('click', () => {
+            document.getElementById('fileInput').click();
+        });
+
+        function handleFiles(files) {
+            const fileListDiv = document.getElementById('file-list');
+            fileListDiv.innerHTML = ''; // Czyści listę
+
+            if (files.length === 0) {
+                fileListDiv.innerHTML = '<p class="text-gray-500">Nie wgrano żadnych plików.</p>';
+                return;
+            }
+
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                const fileSizeMB = (file.size / (1024 * 1024)).toFixed(1);
+                const fileItem = document.createElement('div');
+                fileItem.className = 'flex justify-between items-center text-sm';
+
+                // Walidacja (dla celów dydaktycznych)
+                if (fileSizeMB > 10) {
+                    fileItem.innerHTML = `
+                        <span class="text-red-500">❌ ${file.name} (${fileSizeMB}MB)</span>
+                        <span class="text-xs text-red-500">Zbyt duży (>10MB)</span>
+                    `;
+                    document.getElementById('okButton').disabled = true;
+                } else {
+                    fileItem.innerHTML = `
+                        <span>📄 ${file.name} <span class="text-gray-500">(${fileSizeMB}MB)</span></span>
+                        <span class="text-xs text-green-500">Wgrano</span>
+                    `;
+                    document.getElementById('okButton').disabled = false;
+                }
+                fileListDiv.appendChild(fileItem);
+            }
+        }
+        
+        // Symulacja procesu konwersji
+        document.getElementById('okButton').addEventListener('click', () => {
+            const progressBar = document.getElementById('progressBar');
+            const downloadButton = document.getElementById('downloadButton');
+            const progressText = document.getElementById('progressText');
+            
+            progressBar.style.width = '0%';
+            downloadButton.disabled = true;
+            progressText.textContent = '0% przetworzono';
+
+            let progress = 0;
+            const interval = setInterval(() => {
+                progress += 10;
+                progressBar.style.width = `${progress}%`;
+                progressText.textContent = `${progress}% przetworzono`;
+
+                if (progress >= 100) {
+                    clearInterval(interval);
+                    downloadButton.disabled = false;
+                    downloadButton.className = 'w-full bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700 transition duration-300 shadow-md';
+                    progressText.textContent = 'Konwersja zakończona!';
+                }
+            }, 500); // Symulacja trwa 5 sekund
+        });
+    </script>
+</body>
+</html>
