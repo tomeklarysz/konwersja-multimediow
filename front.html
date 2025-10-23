@@ -30,10 +30,10 @@
         
         <header class="flex justify-between items-start mb-6">
             <div class="w-32 h-20">
-                <img src="./Gemini_Generated_Image_ld6pj0ld6pj0ld6p.png" alt="Logo" class="w-full h-full object-contain">
+                <img src="./TBDW.png" alt="Logo" class="w-full h-full object-contain">
             </div>
 
-            <div class="w-34 h-25">
+            <div class="w-44 h-22">
                 <img src="./human-14369_256.gif" alt="Animacja człowieka z psem" class="w-full h-full object-contain">
             </div>
         </header>
@@ -102,9 +102,11 @@
         </main>
         
         <footer class="mt-8 pt-4 border-t border-gray-200">
-            <div class="h-12 bg-gray-700 text-white flex items-center justify-center rounded-md text-sm">
-                AD BANNER (Opcjonalny baner reklamowy)
-            </div>
+                    <a id="adBannerLink" href="https://cityfit.pl/" target="_blank" rel="noopener noreferrer" 
+               class="block h-12 bg-gray-800 text-white flex items-center justify-center rounded-md text-sm 
+                      font-semibold transition-all duration-300 hover:bg-blue-600 hover:shadow-lg">
+                    🏋️&nbsp; CityFit Kraków – Dołącz do klubu! Sprawdź ofertę specjalną.
+            </a>
         </footer>
 
     </div>
@@ -291,6 +293,55 @@
                 console.error('Download error', e);
                 alert('Download error: ' + e.message);
             }
+        });
+            // --- KOD DO AUTOMATYCZNEJ ZMIANY REKLAM (KARUZELA) ---
+
+        // Czekamy, aż cała strona się załaduje
+        document.addEventListener('DOMContentLoaded', () => {
+
+            // 1. Zdefiniuj swoje reklamy (tekst + link)
+            const ads = [
+                    { 
+                        text: '🏋️&nbsp; CityFit Kraków – Dołącz do klubu! Sprawdź ofertę.', 
+                        link: 'https://cityfit.pl/' 
+                    },
+                    { 
+                        text: '⚽ Kibicuj Wiśle Kraków! Sprawdź bilety na najbliższy mecz.', 
+                        link: 'https://wislakrakow.com/'
+                    },
+                    { 
+                        text: '⚪⚫ Zobacz mecz Sandecji Nowy Sącz! Kup bilet już dziś.', 
+                        link: 'https://sandecja.pl/'
+                    },
+                    { 
+                        text: '💻 Szukasz specjalisty AI? Skontaktuj się ze mną! ', 
+                        link: 'https://lukasz-bilski.eu/'
+                    }
+                ];
+
+            let currentAdIndex = 0;
+            const adLink = document.getElementById('adBannerLink');
+
+            function showNextAd() {
+                if (adLink) {
+                    // 2. Pobierz bieżącą reklamę
+                    const ad = ads[currentAdIndex];
+                    
+                    // 3. Zaktualizuj link i treść banera
+                    adLink.href = ad.link;
+                    adLink.innerHTML = ad.text;
+
+                    // 4. Przygotuj indeks następnej reklamy
+                    // (Operator % sprawia, że wracamy do 0 po dojściu do końca listy)
+                    currentAdIndex = (currentAdIndex + 1) % ads.length;
+                }
+            }
+
+            // Pokaż pierwszą reklamę od razu
+            showNextAd();
+
+            // Ustaw interwał, aby zmieniać reklamę co 5 sekund (5000 milisekund)
+            setInterval(showNextAd, 3000);
         });
     </script>
 </body>
