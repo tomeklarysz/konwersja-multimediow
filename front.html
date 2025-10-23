@@ -51,7 +51,7 @@
                 </div>
                 
                 <div id="file-list" class="space-y-2 text-gray-700">
-                    <div class="flex justify-between items-center text-sm">
+                    <!-- <div class="flex justify-between items-center text-sm">
                         <span>📄 video1.mp4 <span class="text-gray-500">(8.2MB)</span></span>
                         <span class="text-xs text-gray-400">Wgrano</span>
                     </div>
@@ -62,7 +62,7 @@
                     <div class="flex justify-between items-center text-sm">
                         <span>📄 audio3.mp3 <span class="text-gray-500">(3.1MB)</span></span>
                         <span class="text-xs text-gray-400">Wgrano</span>
-                    </div>
+                    </div> -->
                 </div>
 
                 <div class="mt-8">
@@ -81,15 +81,22 @@
                             <option value="avi">AVI</option>
                             <option value="jpeg">JPEG</option>
                             <option value="mp3">MP3</option>
+                            <option value="png">PNG</option>
+                            <option value="bmp">BMP</option>
+                            <option value="flv">FLV</option>
+                            <option value="mov">MOV</option>
+                            <option value="wav">WAV</option>
+                            <option value="3gg">3GG</option>
+                            <option value="midi">MiDi</option>
                         </select>
                         
-                        <button id="okButton" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700 transition duration-300 shadow-md">OK</button>
+                        <button id="okButton" type="button" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700 transition duration-300 shadow-md">OK</button>
                     </div>
                 </div>
                 
                 <div class="mt-8">
                     <p class="text-sm text-gray-600 mb-2" id="progressText">40% przetworzono</p>
-                    <button id="downloadButton" disabled class="w-full bg-gray-300 text-gray-700 px-4 py-2 rounded-lg font-semibold cursor-not-allowed">DOWNLOAD</button>
+                    <button id="downloadButton" type="button" class="w-full bg-gray-300 text-gray-700 px-4 py-2 rounded-lg font-semibold">DOWNLOAD</button>
                 </div>
             </div>
         </main>
@@ -109,7 +116,7 @@
 
         function handleFiles(files) {
             const fileListDiv = document.getElementById('file-list');
-            fileListDiv.innerHTML = ''; // Czyści listę
+            // fileListDiv.innerHTML = ''; // Czyści listę
 
             if (files.length === 0) {
                 fileListDiv.innerHTML = '<p class="text-gray-500">Nie wgrano żadnych plików.</p>';
@@ -128,7 +135,7 @@
                         <span class="text-red-500">❌ ${file.name} (${fileSizeMB}MB)</span>
                         <span class="text-xs text-red-500">Zbyt duży (>10MB)</span>
                     `;
-                    document.getElementById('okButton').disabled = true;
+                    // document.getElementById('okButton').disabled = true;
                 } else {
                     fileItem.innerHTML = `
                         <span>📄 ${file.name} <span class="text-gray-500">(${fileSizeMB}MB)</span></span>
@@ -140,29 +147,150 @@
             }
         }
         
-        // Symulacja procesu konwersji
-        document.getElementById('okButton').addEventListener('click', () => {
+        // Real upload + conversion flow
+        let lastUploaded = null; // { filename, converted_filename, file_type }
+
+        document.getElementById('okButton').addEventListener('click', async (e) => {
+            e.preventDefault();
+            const fileInput = document.getElementById('fileInput');
+            const files = fileInput.files;
+            if (!files || files.length === 0) {
+                alert('Wybierz plik do wysłania.');
+                return;
+            }
+
+            const convertTo = document.getElementById('convert-select').value;
             const progressBar = document.getElementById('progressBar');
             const downloadButton = document.getElementById('downloadButton');
             const progressText = document.getElementById('progressText');
-            
+
+            // Only upload the first file for now
+            const file = files[0];
             progressBar.style.width = '0%';
-            downloadButton.disabled = true;
-            progressText.textContent = '0% przetworzono';
+            // downloadButton.disabled = true;
+            progressText.textContent = 'Wysyłanie...';
 
-            let progress = 0;
-            const interval = setInterval(() => {
-                progress += 10;
-                progressBar.style.width = `${progress}%`;
-                progressText.textContent = `${progress}% przetworzono`;
+            const form = new FormData();
+            form.append('file', file);
+            form.append('file_type', file.name.split('.').pop());
+            form.append('convert_to', convertTo);
 
-                if (progress >= 100) {
-                    clearInterval(interval);
-                    downloadButton.disabled = false;
-                    downloadButton.className = 'w-full bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700 transition duration-300 shadow-md';
-                    progressText.textContent = 'Konwersja zakończona!';
+            try {
+                console.log('Uploading', file.name, 'convert_to=', convertTo);
+                const resp = await fetch('http://127.0.0.1:5000/upload', {
+                    method: 'POST',
+                    body: form
+                });
+
+                console.log('Upload response', resp.status, resp.ok);
+                if (!resp.ok) {
+                    // try to parse json error, fall back to statusText
+                    let err = {};
+                    try { err = await resp.json(); } catch (_) { }
+                    alert('Upload failed: ' + (err.message || resp.statusText));
+                    progressText.textContent = 'Błąd przesyłu';
+                    return;
                 }
-            }, 500); // Symulacja trwa 5 sekund
+                // Optimistically enable the download button now to avoid being blocked by JSON parsing or timing
+                downloadButton.disabled = false;
+                downloadButton.removeAttribute('disabled');
+                downloadButton.setAttribute('aria-disabled', 'false');
+                // remove disabled visual classes and add active ones using classList to avoid overwriting other classes
+                downloadButton.classList.remove('bg-gray-300', 'text-gray-700', 'cursor-not-allowed');
+                downloadButton.classList.add('bg-blue-600', 'text-white');
+                // ensure hover shadow classes are present
+                downloadButton.classList.add('hover:bg-blue-700', 'transition', 'duration-300', 'shadow-md');
+
+                // Protect the button from accidental re-disable by attaching a MutationObserver once
+                try {
+                    if (!window.__downloadButtonObserverAttached) {
+                        const observer = new MutationObserver((mutations) => {
+                            for (const m of mutations) {
+                                if (m.type === 'attributes' && m.attributeName === 'disabled') {
+                                    if (downloadButton.disabled) {
+                                        console.warn('downloadButton was re-disabled; re-enabling');
+                                        downloadButton.disabled = false;
+                                        downloadButton.removeAttribute('disabled');
+                                        downloadButton.setAttribute('aria-disabled', 'false');
+                                        downloadButton.classList.remove('bg-gray-300', 'text-gray-700', 'cursor-not-allowed');
+                                        downloadButton.classList.add('bg-blue-600', 'text-white');
+                                    }
+                                }
+                            }
+                        });
+                        observer.observe(downloadButton, { attributes: true });
+                        window.__downloadButtonObserverAttached = true;
+                        console.log('attached downloadButton MutationObserver');
+                    }
+                } catch (obsErr) {
+                    console.warn('Failed to attach MutationObserver for downloadButton', obsErr);
+                }
+
+                let data = {};
+                try {
+                    data = await resp.json();
+                    console.log('Upload response body', data);
+                } catch (parseErr) {
+                    console.warn('Failed to parse JSON from upload response', parseErr);
+                }
+
+                // Mark progress as complete
+                progressBar.style.width = '100%';
+                progressText.textContent = 'Konwersja zakończona!';
+
+                // Save details needed for download, fallback to client-side assumptions
+                lastUploaded = {
+                    filename: (data && data.filename) ? data.filename : file.name,
+                    converted_filename: (data && data.converted && data.converted.converted_filename) ? data.converted.converted_filename : (file.name.split('.').slice(0,-1).join('.') + '.' + convertTo),
+                    file_type: (data && data.file_type) ? data.file_type : ''
+                };
+                console.log('Download button enabled', lastUploaded);
+
+            } catch (e) {
+                console.error('Upload error', e);
+                alert('Upload error: ' + e.message);
+                progressText.textContent = 'Błąd przesyłu';
+            }
+        });
+
+        document.getElementById('downloadButton').addEventListener('click', async (e) => {
+            e.preventDefault();
+            if (!lastUploaded) return;
+            const convertTo = document.getElementById('convert-select').value;
+
+            // Build download URL
+            const url = new URL('http://127.0.0.1:5000/download');
+            url.searchParams.set('filename', lastUploaded.filename);
+            // If converted file was stored server-side, use that; otherwise request conversion
+            if (lastUploaded.converted_filename && lastUploaded.converted_filename !== lastUploaded.filename) {
+                // If server already saved converted file, request it directly (no convert_to param needed)
+            } else {
+                // ask server to convert on-the-fly
+                url.searchParams.set('convert_to', convertTo);
+            }
+
+            try {
+                const resp = await fetch(url.toString());
+                if (!resp.ok) {
+                    const err = await resp.json().catch(() => ({}));
+                    alert('Download failed: ' + (err.message || resp.statusText));
+                    return;
+                }
+
+                const blob = await resp.blob();
+                const blobUrl = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = blobUrl;
+                a.download = lastUploaded.converted_filename || lastUploaded.filename;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                // release object URL after a short delay
+                setTimeout(() => URL.revokeObjectURL(blobUrl), 5000);
+            } catch (e) {
+                console.error('Download error', e);
+                alert('Download error: ' + e.message);
+            }
         });
     </script>
 </body>
