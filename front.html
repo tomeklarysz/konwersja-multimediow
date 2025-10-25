@@ -112,193 +112,183 @@
     </div>
 
     <script>
-        document.getElementById('upload-area').addEventListener('click', () => {
-            document.getElementById('fileInput').click();
-        });
-
-        function handleFiles(files) {
-            const fileListDiv = document.getElementById('file-list');
-            // fileListDiv.innerHTML = ''; // Czyści listę
-
-            if (files.length === 0) {
-                fileListDiv.innerHTML = '<p class="text-gray-500">Nie wgrano żadnych plików.</p>';
-                return;
-            }
-
-            for (let i = 0; i < files.length; i++) {
-                const file = files[i];
-                const fileSizeMB = (file.size / (1024 * 1024)).toFixed(1);
-                const fileItem = document.createElement('div');
-                fileItem.className = 'flex justify-between items-center text-sm';
-
-                // Walidacja (dla celów dydaktycznych)
-                if (fileSizeMB > 10) {
-                    fileItem.innerHTML = `
-                        <span class="text-red-500">❌ ${file.name} (${fileSizeMB}MB)</span>
-                        <span class="text-xs text-red-500">Zbyt duży (>10MB)</span>
-                    `;
-                    // document.getElementById('okButton').disabled = true;
-                } else {
-                    fileItem.innerHTML = `
-                        <span>📄 ${file.name} <span class="text-gray-500">(${fileSizeMB}MB)</span></span>
-                        <span class="text-xs text-green-500">Wgrano</span>
-                    `;
-                    document.getElementById('okButton').disabled = false;
+        // Prevent accidental form submission/reload
+        window.addEventListener('keydown', (e) => {
+            // Prevent Enter from submitting if any input or select is focused
+            if (e.key === 'Enter' || e.keyCode === 13) {
+                const tag = document.activeElement.tagName;
+                if (tag === 'INPUT' || tag === 'SELECT' || tag === 'BUTTON') {
+                    e.preventDefault();
+                    return false;
                 }
-                fileListDiv.appendChild(fileItem);
             }
-        }
-        
-        // Real upload + conversion flow
-        let lastUploaded = null; // { filename, converted_filename, file_type }
-
-        document.getElementById('okButton').addEventListener('click', async (e) => {
+        });
+        // Prevent any form submission globally and log if it happens
+        window.addEventListener('submit', function(e) {
+            console.warn('Blocked form submit event:', e.target);
             e.preventDefault();
-            const fileInput = document.getElementById('fileInput');
-            const files = fileInput.files;
-            if (!files || files.length === 0) {
-                alert('Wybierz plik do wysłania.');
-                return;
-            }
+            return false;
+        }, true);
 
-            const convertTo = document.getElementById('convert-select').value;
-            const progressBar = document.getElementById('progressBar');
-            const downloadButton = document.getElementById('downloadButton');
-            const progressText = document.getElementById('progressText');
-
-            // Only upload the first file for now
-            const file = files[0];
-            progressBar.style.width = '0%';
-            // downloadButton.disabled = true;
-            progressText.textContent = 'Wysyłanie...';
-
-            const form = new FormData();
-            form.append('file', file);
-            form.append('file_type', file.name.split('.').pop());
-            form.append('convert_to', convertTo);
-
-            try {
-                console.log('Uploading', file.name, 'convert_to=', convertTo);
-                const resp = await fetch('http://127.0.0.1:5000/upload', {
-                    method: 'POST',
-                    body: form
-                });
-
-                console.log('Upload response', resp.status, resp.ok);
-                if (!resp.ok) {
-                    // try to parse json error, fall back to statusText
-                    let err = {};
-                    try { err = await resp.json(); } catch (_) { }
-                    alert('Upload failed: ' + (err.message || resp.statusText));
-                    progressText.textContent = 'Błąd przesyłu';
-                    return;
-                }
-                // Optimistically enable the download button now to avoid being blocked by JSON parsing or timing
-                downloadButton.disabled = false;
-                downloadButton.removeAttribute('disabled');
-                downloadButton.setAttribute('aria-disabled', 'false');
-                // remove disabled visual classes and add active ones using classList to avoid overwriting other classes
-                downloadButton.classList.remove('bg-gray-300', 'text-gray-700', 'cursor-not-allowed');
-                downloadButton.classList.add('bg-blue-600', 'text-white');
-                // ensure hover shadow classes are present
-                downloadButton.classList.add('hover:bg-blue-700', 'transition', 'duration-300', 'shadow-md');
-
-                // Protect the button from accidental re-disable by attaching a MutationObserver once
-                try {
-                    if (!window.__downloadButtonObserverAttached) {
-                        const observer = new MutationObserver((mutations) => {
-                            for (const m of mutations) {
-                                if (m.type === 'attributes' && m.attributeName === 'disabled') {
-                                    if (downloadButton.disabled) {
-                                        console.warn('downloadButton was re-disabled; re-enabling');
-                                        downloadButton.disabled = false;
-                                        downloadButton.removeAttribute('disabled');
-                                        downloadButton.setAttribute('aria-disabled', 'false');
-                                        downloadButton.classList.remove('bg-gray-300', 'text-gray-700', 'cursor-not-allowed');
-                                        downloadButton.classList.add('bg-blue-600', 'text-white');
-                                    }
-                                }
-                            }
-                        });
-                        observer.observe(downloadButton, { attributes: true });
-                        window.__downloadButtonObserverAttached = true;
-                        console.log('attached downloadButton MutationObserver');
-                    }
-                } catch (obsErr) {
-                    console.warn('Failed to attach MutationObserver for downloadButton', obsErr);
-                }
-
-                let data = {};
-                try {
-                    data = await resp.json();
-                    console.log('Upload response body', data);
-                } catch (parseErr) {
-                    console.warn('Failed to parse JSON from upload response', parseErr);
-                }
-
-                // Mark progress as complete
-                progressBar.style.width = '100%';
-                progressText.textContent = 'Konwersja zakończona!';
-
-                // Save details needed for download, fallback to client-side assumptions
-                lastUploaded = {
-                    filename: (data && data.filename) ? data.filename : file.name,
-                    converted_filename: (data && data.converted && data.converted.converted_filename) ? data.converted.converted_filename : (file.name.split('.').slice(0,-1).join('.') + '.' + convertTo),
-                    file_type: (data && data.file_type) ? data.file_type : ''
-                };
-                console.log('Download button enabled', lastUploaded);
-
-            } catch (e) {
-                console.error('Upload error', e);
-                alert('Upload error: ' + e.message);
-                progressText.textContent = 'Błąd przesyłu';
-            }
-        });
-
-        document.getElementById('downloadButton').addEventListener('click', async (e) => {
-            e.preventDefault();
-            if (!lastUploaded) return;
-            const convertTo = document.getElementById('convert-select').value;
-
-            // Build download URL
-            const url = new URL('http://127.0.0.1:5000/download');
-            url.searchParams.set('filename', lastUploaded.filename);
-            // If converted file was stored server-side, use that; otherwise request conversion
-            if (lastUploaded.converted_filename && lastUploaded.converted_filename !== lastUploaded.filename) {
-                // If server already saved converted file, request it directly (no convert_to param needed)
-            } else {
-                // ask server to convert on-the-fly
-                url.searchParams.set('convert_to', convertTo);
-            }
-
-            try {
-                const resp = await fetch(url.toString());
-                if (!resp.ok) {
-                    const err = await resp.json().catch(() => ({}));
-                    alert('Download failed: ' + (err.message || resp.statusText));
-                    return;
-                }
-
-                const blob = await resp.blob();
-                const blobUrl = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = blobUrl;
-                a.download = lastUploaded.converted_filename || lastUploaded.filename;
-                document.body.appendChild(a);
-                a.click();
-                a.remove();
-                // release object URL after a short delay
-                setTimeout(() => URL.revokeObjectURL(blobUrl), 5000);
-            } catch (e) {
-                console.error('Download error', e);
-                alert('Download error: ' + e.message);
-            }
-        });
-            // --- KOD DO AUTOMATYCZNEJ ZMIANY REKLAM (KARUZELA) ---
-
-        // Czekamy, aż cała strona się załaduje
+        // Remove any <form> elements from DOM on load (defensive)
         document.addEventListener('DOMContentLoaded', () => {
+            document.querySelectorAll('form').forEach(f => {
+                console.warn('Removing unexpected <form> element from DOM:', f);
+                f.parentNode && f.parentNode.removeChild(f);
+            });
 
+            document.getElementById('upload-area').addEventListener('click', () => {
+                document.getElementById('fileInput').click();
+            });
+
+            document.getElementById('okButton').addEventListener('click', async (e) => {
+                try {
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    const fileInput = document.getElementById('fileInput');
+                    const files = fileInput.files;
+                    if (!files || files.length === 0) {
+                        alert('Wybierz plik do wysłania.');
+                        return;
+                    }
+
+                    const convertSelect = document.getElementById('convert-select');
+                    const convertTo = convertSelect.value;
+                    const progressBar = document.getElementById('progressBar');
+                    const downloadButton = document.getElementById('downloadButton');
+                    const progressText = document.getElementById('progressText');
+
+                    // Only upload the first file for now
+                    const file = files[0];
+                    progressBar.style.width = '0%';
+                    downloadButton.disabled = true;
+                    downloadButton.classList.add('bg-gray-300', 'text-gray-700', 'cursor-not-allowed');
+                    downloadButton.classList.remove('bg-blue-600', 'text-white');
+                    progressText.textContent = 'Wysyłanie...';
+
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    formData.append('convert_to', convertTo);
+
+                    const resp = await fetch('http://127.0.0.1:5000/upload', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    if (!resp.ok) {
+                        let err = {};
+                        try { err = await resp.json(); } catch (_) { }
+                        const errorMsg = 'Upload failed: ' + (err.message || resp.statusText);
+                        console.error(errorMsg, 'Status:', resp.status);
+                        alert(errorMsg);
+                        progressText.textContent = 'Błąd przesyłu';
+                        progressBar.style.width = '0%';
+                        return;
+                    }
+
+                    const data = await resp.json();
+                    if (!data.job_id) {
+                        alert('Brak job_id w odpowiedzi backendu.');
+                        progressText.textContent = 'Błąd odpowiedzi';
+                        return;
+                    }
+
+                    lastJobId = data.job_id;
+                    progressText.textContent = 'Przetwarzanie...';
+                    progressBar.style.width = '10%';
+
+                    // Clear file input value so onchange will fire if user selects same file again
+                    fileInput.value = '';
+
+                    // Start polling for job status
+                    if (pollInterval) clearInterval(pollInterval);
+                    pollInterval = setInterval(async () => {
+                        try {
+                            console.log('Polling job status for', lastJobId);
+                            const statusResp = await fetch(`http://127.0.0.1:5000/status/${lastJobId}`);
+                            if (!statusResp.ok) {
+                                console.warn('Polling failed with status', statusResp.status);
+                                // Stop polling on persistent failure
+                                clearInterval(pollInterval);
+                                pollInterval = null;
+                                progressText.textContent = 'Błąd statusu';
+                                return;
+                            }
+                            const statusData = await statusResp.json();
+                            progressText.textContent = `${statusData.progress}% przetworzono (${statusData.status})`;
+                            progressBar.style.width = `${statusData.progress}%`;
+
+                            if (statusData.status === 'COMPLETED') {
+                                clearInterval(pollInterval);
+                                pollInterval = null;
+                                downloadButton.disabled = false;
+                                downloadButton.removeAttribute('disabled');
+                                downloadButton.setAttribute('aria-disabled', 'false');
+                                downloadButton.classList.remove('bg-gray-300', 'text-gray-700', 'cursor-not-allowed');
+                                downloadButton.classList.add('bg-blue-600', 'text-white');
+                                downloadButton.classList.add('hover:bg-blue-700', 'transition', 'duration-300', 'shadow-md');
+                                progressText.textContent = 'Konwersja zakończona!';
+                            } else if (statusData.status === 'FAILED') {
+                                clearInterval(pollInterval);
+                                pollInterval = null;
+                                const errorDetail = statusData.error || 'Nieznany błąd';
+                                progressText.textContent = 'Błąd konwersji!';
+                                alert('Konwersja nie powiodła się: ' + errorDetail);
+                            }
+                        } catch (err) {
+                            console.error('Polling error:', err);
+                            clearInterval(pollInterval);
+                            pollInterval = null;
+                            progressText.textContent = 'Błąd odpytywania';
+                        }
+                    }, 1000);
+
+                } catch (e) {
+                    console.error('An unexpected error occurred in the click handler:', e);
+                    alert('An unexpected error occurred: ' + e.message);
+                    // Reset UI in case of unexpected error
+                    const progressText = document.getElementById('progressText');
+                    if(progressText) progressText.textContent = 'Krytyczny błąd';
+                    const progressBar = document.getElementById('progressBar');
+                    if(progressBar) progressBar.style.width = '0%';
+                }
+            });
+
+            document.getElementById('downloadButton').addEventListener('click', async (e) => {
+                e.preventDefault();
+                if (!lastJobId) return;
+                const url = `http://127.0.0.1:5000/download/${lastJobId}`;
+                try {
+                    const resp = await fetch(url);
+                    if (!resp.ok) {
+                        const err = await resp.json().catch(() => ({}));
+                        alert('Download failed: ' + (err.message || resp.statusText));
+                        return;
+                    }
+                    // Try to get filename from Content-Disposition header
+                    let filename = 'converted_file';
+                    const cd = resp.headers.get('Content-Disposition');
+                    if (cd) {
+                        const match = cd.match(/filename="?([^";]+)"?/);
+                        if (match) filename = match[1];
+                    }
+                    const blob = await resp.blob();
+                    const blobUrl = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = blobUrl;
+                    a.download = filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    setTimeout(() => URL.revokeObjectURL(blobUrl), 5000);
+                } catch (e) {
+                    console.error('Download error', e);
+                    alert('Download error: ' + e.message);
+                }
+            });
+
+            // --- KOD DO AUTOMATYCZNEJ ZMIANY REKLAM (KARUZELA) ---
             // 1. Zdefiniuj swoje reklamy (tekst + link)
             const ads = [
                     { 
@@ -343,6 +333,37 @@
             // Ustaw interwał, aby zmieniać reklamę co 5 sekund (5000 milisekund)
             setInterval(showNextAd, 3000);
         });
+
+        function handleFiles(files) {
+            const fileListDiv = document.getElementById('file-list');
+            fileListDiv.innerHTML = '';
+            if (files.length === 0) {
+                fileListDiv.innerHTML = '<p class="text-gray-500">Nie wgrano żadnych plików.</p>';
+                return;
+            }
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                const fileSizeMB = (file.size / (1024 * 1024)).toFixed(1);
+                const fileItem = document.createElement('div');
+                fileItem.className = 'flex justify-between items-center text-sm';
+                if (fileSizeMB > 10) {
+                    fileItem.innerHTML = `
+                        <span class="text-red-500">❌ ${file.name} (${fileSizeMB}MB)</span>
+                        <span class="text-xs text-red-500">Zbyt duży (>10MB)</span>
+                    `;
+                } else {
+                    fileItem.innerHTML = `
+                        <span>📄 ${file.name} <span class="text-gray-500">(${fileSizeMB}MB)</span></span>
+                        <span class="text-xs text-green-500">Wgrano</span>
+                    `;
+                }
+                fileListDiv.appendChild(fileItem);
+            }
+        }
+        
+        // Real upload + conversion flow
+        let lastJobId = null;
+        let pollInterval = null;
     </script>
 </body>
 </html>
